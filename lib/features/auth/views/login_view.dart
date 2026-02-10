@@ -15,6 +15,7 @@ class _LoginViewState extends State<LoginView> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   late final AuthController _controller;
+  bool _obscurePassword = true;
 
   @override
   void initState() {
@@ -36,7 +37,7 @@ class _LoginViewState extends State<LoginView> {
         title: const Text('Login'),
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -53,8 +54,20 @@ class _LoginViewState extends State<LoginView> {
               const SizedBox(height: 16),
               TextField(
                 controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Password'),
+                obscureText: _obscurePassword,
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  suffixIcon: IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _obscurePassword = !_obscurePassword;
+                      });
+                    },
+                    icon: Icon(
+                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                    ),
+                  ),
+                ),
               ),
               const SizedBox(height: 24),
               Obx(

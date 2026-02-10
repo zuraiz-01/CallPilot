@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../app/routes/app_routes.dart';
 import '../controllers/history_controller.dart';
 
 class HistoryView extends GetView<HistoryController> {
@@ -13,9 +14,14 @@ class HistoryView extends GetView<HistoryController> {
         title: const Text('History'),
         actions: [
           IconButton(
-            onPressed: controller.clearHistory,
-            icon: const Icon(Icons.delete_outline),
-            tooltip: 'Clear',
+            onPressed: () => Get.offNamed(AppRoutes.dialer),
+            icon: const Icon(Icons.dialpad),
+            tooltip: 'Dialer',
+          ),
+          IconButton(
+            onPressed: controller.loadHistory,
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
           ),
         ],
       ),
@@ -24,7 +30,21 @@ class HistoryView extends GetView<HistoryController> {
           padding: const EdgeInsets.all(24),
           child: Obx(
             () {
-              if (controller.items.isEmpty) {
+              if (controller.isLoading.value) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (controller.errorMessage.value != null) {
+                return Center(
+                  child: Text(
+                    controller.errorMessage.value!,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                );
+              }
+
+              if (controller.logs.isEmpty) {
                 return Center(
                   child: Text(
                     'No calls yet',
@@ -32,16 +52,22 @@ class HistoryView extends GetView<HistoryController> {
                   ),
                 );
               }
+
               return ListView.separated(
-                itemCount: controller.items.length,
+                itemCount: controller.logs.length,
                 separatorBuilder: (context, index) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
-                  final number = controller.items[index];
+                  final log = controller.logs[index];
                   return Card(
                     child: ListTile(
-                      title: Text(number),
-                      subtitle: const Text('Completed'),
-                      trailing: const Icon(Icons.call_made),
+                      title: Text(log.toNumber),
+                      subtitle: Text(
+                        '${log.status} · ${controller.formatDuration(log.durationSec)}',
+                      ),
+                      trailing: Text(
+                        controller.formatDate(log.startedAt),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     ),
                   );
                 },

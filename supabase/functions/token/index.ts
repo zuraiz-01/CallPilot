@@ -1,4 +1,4 @@
-﻿import { AccessToken } from "npm:twilio@4.21.0";
+﻿import { create } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,19 +39,38 @@ Deno.serve(async (req) => {
     });
   }
 
-  const token = new AccessToken(accountSid, apiKeySid, apiKeySecret, {
-    identity,
-  });
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss: apiKeySid,
+    sub: accountSid,
+    nbf: now,
+    exp: now + 3600,
+    jti: `${apiKeySid}-${crypto.randomUUID()}`,
+    grants: {
+      identity,
+      voice: {
+        outgoing: { application_sid: twimlAppSid },
+        incoming: false,
+      },
+    },
+  };
 
-  const voiceGrant = new AccessToken.VoiceGrant({
-    outgoingApplicationSid: twimlAppSid,
-    incomingAllow: false,
-  });
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(apiKeySecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign", "verify"],
+  );
 
-  token.addGrant(voiceGrant);
+  const token = await create(
+    { alg: "HS256", typ: "JWT", cty: "twilio-fpa;v=1" },
+    payload,
+    key,
+  );
 
   return new Response(
-    JSON.stringify({ token: token.toJwt(), identity }),
+    JSON.stringify({ token, identity }),
     {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     },

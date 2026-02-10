@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../core/config/supabase_service.dart';
@@ -12,7 +13,11 @@ import '../../history/repo/history_repository.dart';
 enum CallStatus { idle, calling, connected, ended, error }
 
 class CallController extends GetxController {
-  CallController(this._voiceService, this._supabaseService, this._historyRepository);
+  CallController(
+    this._voiceService,
+    this._supabaseService,
+    this._historyRepository,
+  );
 
   final TwilioVoiceService _voiceService;
   final SupabaseService _supabaseService;
@@ -24,6 +29,7 @@ class CallController extends GetxController {
   final isMuted = false.obs;
   final isSpeakerOn = false.obs;
   final elapsedSeconds = 0.obs;
+  DateTime? _callStartedAt;
 
   StreamSubscription<CallStateEvent>? _stateSubscription;
   Timer? _timer;
@@ -57,7 +63,8 @@ class CallController extends GetxController {
   }
 
   Future<void> startOutgoingCall() async {
-    if (status.value == CallStatus.calling || status.value == CallStatus.connected) {
+    if (status.value == CallStatus.calling ||
+        status.value == CallStatus.connected) {
       return;
     }
 
@@ -69,8 +76,14 @@ class CallController extends GetxController {
 
     status.value = CallStatus.calling;
     errorMessage.value = null;
+    _callStartedAt ??= DateTime.now();
 
     try {
+      final hasMic = await _ensureMicPermission();
+      if (!hasMic) {
+        _setError('Microphone permission is required to place calls.');
+        return;
+      }
       final token = await _fetchToken(identity);
       await _voiceService.startCall(accessToken: token, to: phoneNumber.value);
     } catch (error) {
@@ -111,6 +124,7 @@ class CallController extends GetxController {
         break;
       case 'connected':
         status.value = CallStatus.connected;
+        _callStartedAt ??= DateTime.now();
         _startTimer();
         break;
       case 'ended':
@@ -125,10 +139,18 @@ class CallController extends GetxController {
   }
 
   Future<String> _fetchToken(String identity) async {
-    final uri = Uri.parse('${SupabaseService.functionsBaseUrl}/token').replace(
-      queryParameters: {'identity': identity},
+    final uri = Uri.parse(
+      '${SupabaseService.functionsBaseUrl}/token',
+    ).replace(queryParameters: {'identity': identity});
+    final accessToken =
+        _supabaseService.client.auth.currentSession?.accessToken;
+    final response = await http.get(
+      uri,
+      headers: {
+        'apikey': SupabaseService.supabaseAnonKey,
+        'Authorization': 'Bearer ${accessToken ?? SupabaseService.supabaseAnonKey}',
+      },
     );
-    final response = await http.get(uri);
     if (response.statusCode != 200) {
       throw Exception('Token request failed (${response.statusCode}).');
     }
@@ -171,8 +193,23 @@ class CallController extends GetxController {
     isMuted.value = false;
     isSpeakerOn.value = false;
 
-    if (phoneNumber.value.isNotEmpty) {
-      _historyRepository.add(phoneNumber.value);
+    final userId = _supabaseService.client.auth.currentUser?.id;
+    if (userId != null &&
+        userId.isNotEmpty &&
+        phoneNumber.value.isNotEmpty &&
+        _callStartedAt != null) {
+      final startedAt = _callStartedAt!;
+      final endedAt = DateTime.now();
+      final duration = elapsedSeconds.value;
+      final statusText = newStatus.name;
+      unawaited(_historyRepository.insertLog(
+        userId: userId,
+        toNumber: phoneNumber.value,
+        startedAt: startedAt,
+        endedAt: endedAt,
+        durationSec: duration,
+        status: statusText,
+      ));
     }
 
     if (Get.currentRoute != AppRoutes.history) {
@@ -191,5 +228,18 @@ class CallController extends GetxController {
   void _stopTimer() {
     _timer?.cancel();
     _timer = null;
+  }
+
+  Future<bool> _ensureMicPermission() async {
+    final status = await Permission.microphone.status;
+    if (status.isGranted) {
+      return true;
+    }
+    final result = await Permission.microphone.request();
+    if (result.isGranted) {
+      return true;
+    }
+    Get.snackbar('Permission required', 'Please allow microphone access.');
+    return false;
   }
 }

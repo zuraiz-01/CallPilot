@@ -3,6 +3,7 @@
 import '../../features/auth/views/boot_view.dart';
 import '../../features/auth/views/login_view.dart';
 import '../../features/auth/views/signup_view.dart';
+import '../../features/call/bindings/call_bindings.dart';
 import '../../features/call/views/call_view.dart';
 import '../../features/dialer/views/dialer_view.dart';
 import '../../features/history/views/history_view.dart';
@@ -22,7 +23,11 @@ class AppRoutes {
     GetPage(name: login, page: () => const LoginView()),
     GetPage(name: signup, page: () => const SignupView()),
     GetPage(name: dialer, page: () => const DialerView()),
-    GetPage(name: call, page: () => const CallView()),
+    GetPage(
+      name: call,
+      page: () => const CallView(),
+      binding: CallBindings(),
+    ),
     GetPage(name: history, page: () => const HistoryView()),
   ];
 }
