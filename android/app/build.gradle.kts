@@ -39,6 +39,10 @@ android {
     }
 }
 
+dependencies {
+    implementation("com.twilio:voice-android:6.10.0")
+}
+
 flutter {
     source = "../.."
 }
